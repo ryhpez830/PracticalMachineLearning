@@ -1,0 +1,114 @@
+---
+title: "Predict How Well an Activity Was Performed"
+author: "ryhpez830"
+date: "2018/02/17"
+output: md_document
+---
+
+### Overview
+Using devices such as Jawbone Up, Nike FuelBand, and Fitbit it is now possible to collect a large amount of data about personal activity relatively inexpensively. These type of devices are part of the quantified self movement – a group of enthusiasts who take measurements about themselves regularly to improve their health, to find patterns in their behavior, or because they are tech geeks. One thing that people regularly do is quantify how much of a particular activity they do, but they rarely quantify how well they do it. In this project, your goal will be to use data from accelerometers on the belt, forearm, arm, and dumbell of 6 participants. They were asked to perform barbell lifts correctly and incorrectly in 5 different ways.
+
+The data come from this source:  <http://groupware.les.inf.puc-rio.br/har>.
+
+### Loading the data
+```{r, echo=TRUE,cache=TRUE}
+download.file("https://d396qusza40orc.cloudfront.net/predmachlearn/pml-training.csv", destfile="training.csv")
+traindata<-read.csv("training.csv",sep=",")
+download.file("https://d396qusza40orc.cloudfront.net/predmachlearn/pml-testing.csv", destfile="testing.csv")
+testing<-read.csv("testing.csv",sep=",")
+```
+
+```{r, results='hide', message=FALSE, warning=FALSE}
+library(randomForest)
+library(caret)
+```
+
+### Split the data
+Set the seed for reproducibility and split the traind data into 70% testing and 30% validation.
+```{r, echo=TRUE,cache=TRUE}
+set.seed(2468)
+inTrain<-createDataPartition(y=traindata$classe, p=0.7, list=F)
+training<-traindata[inTrain,]
+validation<-traindata[-inTrain,]
+dim(training)
+dim(validation)
+```
+
+###  Cleaning the data
+A lot of variables have "NA" and " ". Impute the missing values or drop the variables to increase the accuracy of our model.
+```{r, echo=TRUE,cache=TRUE}
+a<-apply(is.na(training),2,sum)
+table(a)
+```
+67 variables have 13460 "NA"s out of 13737 observations. Remove these unnecessary variables. 
+
+```{r, echo=TRUE, cache=TRUE}
+training<-training[,a==0]
+```
+
+```{r, echo=TRUE,cache=TRUE}
+a2<-apply(training=="",2,sum)
+table(a2)
+```
+33 variables have 13460 " "s out of 13737 observations. Remove these unnecessary variables.
+
+```{r, echo=TRUE, cache=TRUE}
+training<-training[,a2==0] 
+```
+
+"new_window" is a factor variable with two levels: "yes" or "no". 
+```{r, echo=TRUE,cache=TRUE}
+sum(training$new_window=="no")
+```
+13460 out of 13737 obs have the value "no". For the obs with the value "yes", some variables have error values such as "DIV/0!". Remove this "new_window". We can also drop "X", "user_name", "raw_timestamp_part_1", "raw_timestamp_part_2", and "cvtd_timestamp".
+
+```{r, echo=TRUE, cache=TRUE}
+training<-training[,-(1:6)]
+```
+
+Perform the same cleaning process on the validation and the testing data set.
+```{r, echo=TRUE,cache=TRUE}
+validation<-validation[,a==0]
+validation<-validation[,a2==0]
+validation<-validation[,-(1:6)]
+```
+
+```{r, echo=TRUE,cache=TRUE}
+testing<-testing[,a==0]
+testing<-testing[,a2==0]
+testing<-testing[,-(1:6)]
+```
+
+```{r, echo=TRUE, cache=TRUE}
+dim(training)
+dim(validation)
+dim(testing)
+```
+
+
+### Fitting a model
+A ramdom forest model was selected because of its high accuracy.
+```{r, echo=TRUE,cache=TRUE}
+modFit<-randomForest(classe~., data=training)
+predval<-predict(modFit, validation)
+confusionMatrix(predval, validation$classe)
+```
+Our accuracy is 99.75% and the expected out of sample error is 0.25%.
+
+```{r, echo=FALSE,cache=TRUE,fig.height=5.5,fig.width=6}
+color<-c("skyblue","salmon")
+table(validation$classe)->va
+table(predval)->pr
+rbind(va,pr)->d
+barplot(as.matrix(d),col=color,beside=T,xlab="Classe", 
+        ylab="Frequency", main="Histogram of classe",
+        ylim=c(800,1700),xpd=F)
+legend("topright",c("validation","prediction"),fill=color)
+```
+
+### Result
+Use the random forest model to predict "classe" of the testing data.
+```{r,echo=TRUE, cache=TRUE}
+predtest<-predict(modFit, testing)
+predtest
+```
